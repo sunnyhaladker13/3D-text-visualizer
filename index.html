@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Text Space - Ghost in the Shell</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FontLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/TextGeometry.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+        
+        :root {
+            --neon-blue: #00ffff;
+            --neon-green: #00ff00;
+            --neon-yellow: #ffff00;
+            --neon-pink: #ff00ff;
+            --ghost-bg: #0a0a0a;
+            --glass-bg: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Orbitron', monospace;
+            background: var(--ghost-bg);
+            color: var(--neon-blue);
+            overflow: hidden;
+        }
+
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--ghost-bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: opacity 0.5s ease-out;
+        }
+
+        .loading-text {
+            font-size: 2rem;
+            font-weight: 700;
+            text-shadow: 0 0 20px var(--neon-blue);
+            animation: pulse 2s infinite;
+        }
+
+        .loading-bar {
+            width: 300px;
+            height: 4px;
+            background: rgba(0, 255, 255, 0.2);
+            margin-top: 20px;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .loading-progress {
+            height: 100%;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-green));
+            width: 0%;
+            animation: loading 3s ease-in-out forwards;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes loading {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+
+        .ui-panel {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 15px;
+            padding: 20px;
+            z-index: 100;
+            min-width: 300px;
+            box-shadow: 0 8px 32px rgba(0, 255, 255, 0.1);
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--neon-blue);
+        }
+
+        .neon-input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid var(--neon-blue);
+            border-radius: 8px;
+            color: var(--neon-yellow);
+            font-family: 'Orbitron', monospace;
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .neon-input:focus {
+            border-color: var(--neon-green);
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+            text-shadow: 0 0 5px var(--neon-yellow);
+        }
+
+        .slider-container {
+            position: relative;
+            margin: 10px 0;
+        }
+
+        .neon-slider {
+            width: 100%;
+            height: 6px;
+            background: rgba(0, 255, 255, 0.2);
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .neon-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--neon-blue);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--neon-blue);
+            cursor: pointer;
+        }
+
+        .color-picker-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .color-option {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .color-option:hover {
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+        }
+
+        .color-option.active {
+            border-color: var(--neon-green);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
+        }
+
+        .gradient-option {
+            background: linear-gradient(45deg, #ff00ff, #00ffff);
+        }
+
+        .error-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 0, 0, 0.1);
+            border: 2px solid #ff0000;
+            border-radius: 10px;
+            padding: 20px;
+            color: #ff0000;
+            font-weight: 700;
+            z-index: 200;
+            animation: flicker 1s infinite;
+            display: none;
+        }
+
+        @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .mobile-controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .mobile-btn {
+            width: 50px;
+            height: 50px;
+            background: var(--glass-bg);
+            border: 2px solid var(--neon-blue);
+            border-radius: 50%;
+            color: var(--neon-blue);
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .mobile-btn:hover {
+            box-shadow: 0 0 15px var(--neon-blue);
+        }
+
+        @media (max-width: 768px) {
+            .ui-panel {
+                top: 10px;
+                left: 10px;
+                right: 10px;
+                min-width: auto;
+            }
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-text">INITIALIZING NEURAL LINK</div>
+        <div class="loading-bar">
+            <div class="loading-progress"></div>
+        </div>
+    </div>
+
+    <div class="ui-panel">
+        <div class="control-group">
+            <label class="control-label">Text Input</label>
+            <input type="text" class="neon-input" id="textInput" placeholder="Enter text..." value="GHOST IN THE SHELL">
+        </div>
+
+        <div class="control-group">
+            <label class="control-label">Text Size</label>
+            <div class="slider-container">
+                <input type="range" class="neon-slider" id="sizeSlider" min="0.5" max="5" value="2" step="0.1">
+                <span id="sizeValue">2.0</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label class="control-label">Text Color</label>
+            <div class="color-picker-grid">
+                <div class="color-option active" data-color="#ffff00" style="background: #ffff00;"></div>
+                <div class="color-option" data-color="#00ffff" style="background: #00ffff;"></div>
+                <div class="color-option" data-color="#ff00ff" style="background: #ff00ff;"></div>
+                <div class="color-option" data-color="#00ff00" style="background: #00ff00;"></div>
+                <div class="color-option" data-color="#ff0000" style="background: #ff0000;"></div>
+                <div class="color-option" data-color="#ffffff" style="background: #ffffff;"></div>
+                <div class="color-option" data-color="#ff6600" style="background: #ff6600;"></div>
+                <div class="color-option gradient-option" data-color="gradient-text"></div>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label class="control-label">Background Color</label>
+            <div class="color-picker-grid">
+                <div class="color-option active" data-bg="#000000" style="background: #000000;"></div>
+                <div class="color-option" data-bg="#001122" style="background: #001122;"></div>
+                <div class="color-option" data-bg="#220011" style="background: #220011;"></div>
+                <div class="color-option" data-bg="#112200" style="background: #112200;"></div>
+                <div class="color-option" data-bg="#001100" style="background: #001100;"></div>
+                <div class="color-option" data-bg="#110022" style="background: #110022;"></div>
+                <div class="color-option" data-bg="#222222" style="background: #222222;"></div>
+                <div class="color-option" data-bg="gradient-bg" style="background: linear-gradient(45deg, #000033, #330033);"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mobile-controls">
+        <button class="mobile-btn" id="resetBtn">⟲</button>
+        <button class="mobile-btn" id="fullscreenBtn">⛶</button>
+    </div>
+
+    <div class="error-message" id="errorMessage">
+        ERROR: TEXT INPUT REQUIRED
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        class FuturisticTextApp {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.textMesh = null;
+                this.font = null;
+                this.controls = null;
+                this.currentText = 'GHOST IN THE SHELL';
+                this.textSize = 2;
+                this.textColor = '#ffff00';
+                this.backgroundColor = '#000000';
+                this.isGradientText = false;
+                this.isGradientBg = false;
+                
+                this.init();
+            }
+
+            async init() {
+                await this.loadFont();
+                this.setupScene();
+                this.setupCamera();
+                this.setupRenderer();
+                this.setupControls();
+                this.setupEventListeners();
+                this.createInitialText();
+                this.animate();
+                this.hideLoader();
+            }
+
+            async loadFont() {
+                const loader = new THREE.FontLoader();
+                return new Promise((resolve, reject) => {
+                    loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', (font) => {
+                        this.font = font;
+                        resolve();
+                    }, undefined, reject);
+                });
+            }
+
+            setupScene() {
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(this.backgroundColor);
+                
+                // Add ambient lighting
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+                this.scene.add(ambientLight);
+                
+                // Add directional light
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(10, 10, 10);
+                this.scene.add(directionalLight);
+                
+                // Add point light for glow effect
+                const pointLight = new THREE.PointLight(0x00ffff, 1, 100);
+                pointLight.position.set(0, 0, 10);
+                this.scene.add(pointLight);
+            }
+
+            setupCamera() {
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.z = 10;
+            }
+
+            setupRenderer() {
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('canvas-container').appendChild(this.renderer.domElement);
+            }
+
+            setupControls() {
+                this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.enableDamping = true;
+                this.controls.dampingFactor = 0.05;
+                this.controls.enableZoom = true;
+                this.controls.enablePan = true;
+                this.controls.enableRotate = true;
+                this.controls.autoRotate = false;
+                this.controls.maxDistance = 50;
+                this.controls.minDistance = 1;
+            }
+
+            createTextGeometry(text) {
+                const geometry = new THREE.TextGeometry(text, {
+                    font: this.font,
+                    size: this.textSize,
+                    height: 0.2,
+                    curveSegments: 12,
+                    bevelEnabled: true,
+                    bevelThickness: 0.03,
+                    bevelSize: 0.02,
+                    bevelOffset: 0,
+                    bevelSegments: 5
+                });
+                
+                geometry.computeBoundingBox();
+                const centerOffsetX = -0.5 * (geometry.boundingBox.max.x - geometry.boundingBox.min.x);
+                const centerOffsetY = -0.5 * (geometry.boundingBox.max.y - geometry.boundingBox.min.y);
+                geometry.translate(centerOffsetX, centerOffsetY, 0);
+                
+                return geometry;
+            }
+
+            createTextMaterial() {
+                if (this.isGradientText) {
+                    // Create gradient effect using vertex colors
+                    const material = new THREE.MeshPhongMaterial({
+                        color: 0xffffff,
+                        shininess: 100,
+                        emissive: 0x002200
+                    });
+                    return material;
+                } else {
+                    const material = new THREE.MeshPhongMaterial({
+                        color: this.textColor,
+                        shininess: 100,
+                        emissive: new THREE.Color(this.textColor).multiplyScalar(0.1)
+                    });
+                    return material;
+                }
+            }
+
+            createInitialText() {
+                if (!this.font) return;
+                this.updateText();
+            }
+
+            updateText() {
+                if (!this.font) return;
+                
+                // Remove existing text
+                if (this.textMesh) {
+                    this.scene.remove(this.textMesh);
+                    this.textMesh.geometry.dispose();
+                    this.textMesh.material.dispose();
+                }
+                
+                if (!this.currentText.trim()) {
+                    this.showError();
+                    return;
+                }
+                
+                // Create new text
+                const geometry = this.createTextGeometry(this.currentText);
+                const material = this.createTextMaterial();
+                
+                this.textMesh = new THREE.Mesh(geometry, material);
+                this.textMesh.castShadow = true;
+                this.textMesh.receiveShadow = true;
+                
+                this.scene.add(this.textMesh);
+                
+                // Add glow effect
+                this.addGlowEffect();
+            }
+
+            addGlowEffect() {
+                if (!this.textMesh) return;
+                
+                const glowGeometry = this.textMesh.geometry.clone();
+                const glowMaterial = new THREE.MeshBasicMaterial({
+                    color: this.textColor,
+                    transparent: true,
+                    opacity: 0.3
+                });
+                
+                const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
+                glowMesh.scale.multiplyScalar(1.05);
+                this.textMesh.add(glowMesh);
+            }
+
+            updateBackground() {
+                if (this.isGradientBg) {
+                    // Create gradient background
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 256;
+                    canvas.height = 256;
+                    const ctx = canvas.getContext('2d');
+                    
+                    const gradient = ctx.createLinearGradient(0, 0, 0, 256);
+                    gradient.addColorStop(0, '#000033');
+                    gradient.addColorStop(1, '#330033');
+                    
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(0, 0, 256, 256);
+                    
+                    const texture = new THREE.CanvasTexture(canvas);
+                    this.scene.background = texture;
+                } else {
+                    this.scene.background = new THREE.Color(this.backgroundColor);
+                }
+            }
+
+            setupEventListeners() {
+                // Text input
+                document.getElementById('textInput').addEventListener('input', (e) => {
+                    this.currentText = e.target.value;
+                    this.updateText();
+                });
+
+                // Size slider
+                const sizeSlider = document.getElementById('sizeSlider');
+                const sizeValue = document.getElementById('sizeValue');
+                
+                sizeSlider.addEventListener('input', (e) => {
+                    this.textSize = parseFloat(e.target.value);
+                    sizeValue.textContent = this.textSize.toFixed(1);
+                    this.updateText();
+                });
+
+                // Color pickers
+                document.querySelectorAll('.color-option[data-color]').forEach(option => {
+                    option.addEventListener('click', (e) => {
+                        document.querySelectorAll('.color-option[data-color]').forEach(opt => opt.classList.remove('active'));
+                        e.target.classList.add('active');
+                        
+                        const color = e.target.dataset.color;
+                        if (color === 'gradient-text') {
+                            this.isGradientText = true;
+                            this.textColor = '#ff00ff';
+                        } else {
+                            this.isGradientText = false;
+                            this.textColor = color;
+                        }
+                        this.updateText();
+                    });
+                });
+
+                document.querySelectorAll('.color-option[data-bg]').forEach(option => {
+                    option.addEventListener('click', (e) => {
+                        document.querySelectorAll('.color-option[data-bg]').forEach(opt => opt.classList.remove('active'));
+                        e.target.classList.add('active');
+                        
+                        const bgColor = e.target.dataset.bg;
+                        if (bgColor === 'gradient-bg') {
+                            this.isGradientBg = true;
+                            this.backgroundColor = '#000033';
+                        } else {
+                            this.isGradientBg = false;
+                            this.backgroundColor = bgColor;
+                        }
+                        this.updateBackground();
+                    });
+                });
+
+                // Mobile controls
+                document.getElementById('resetBtn').addEventListener('click', () => {
+                    this.controls.reset();
+                });
+
+                document.getElementById('fullscreenBtn').addEventListener('click', () => {
+                    if (!document.fullscreenElement) {
+                        document.documentElement.requestFullscreen();
+                    } else {
+                        document.exitFullscreen();
+                    }
+                });
+
+                // Window resize
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+
+                // Touch events for mobile
+                this.setupTouchEvents();
+            }
+
+            setupTouchEvents() {
+                const canvas = this.renderer.domElement;
+                let touchStartX = 0;
+                let touchStartY = 0;
+                let touchStartDistance = 0;
+
+                canvas.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 1) {
+                        touchStartX = e.touches[0].clientX;
+                        touchStartY = e.touches[0].clientY;
+                    } else if (e.touches.length === 2) {
+                        touchStartDistance = Math.sqrt(
+                            Math.pow(e.touches[0].clientX - e.touches[1].clientX, 2) +
+                            Math.pow(e.touches[0].clientY - e.touches[1].clientY, 2)
+                        );
+                    }
+                });
+
+                canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    
+                    if (e.touches.length === 2) {
+                        const currentDistance = Math.sqrt(
+                            Math.pow(e.touches[0].clientX - e.touches[1].clientX, 2) +
+                            Math.pow(e.touches[0].clientY - e.touches[1].clientY, 2)
+                        );
+                        
+                        const scale = currentDistance / touchStartDistance;
+                        this.camera.position.z /= scale;
+                        this.camera.position.z = Math.max(1, Math.min(50, this.camera.position.z));
+                        touchStartDistance = currentDistance;
+                    }
+                });
+            }
+
+            showError() {
+                const errorElement = document.getElementById('errorMessage');
+                errorElement.style.display = 'block';
+                setTimeout(() => {
+                    errorElement.style.display = 'none';
+                }, 3000);
+            }
+
+            hideLoader() {
+                setTimeout(() => {
+                    const loader = document.getElementById('loadingScreen');
+                    loader.style.opacity = '0';
+                    setTimeout(() => {
+                        loader.style.display = 'none';
+                    }, 500);
+                }, 3000);
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                this.controls.update();
+                
+                // Add subtle animation to text
+                if (this.textMesh) {
+                    this.textMesh.rotation.y += 0.002;
+                }
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        // Initialize the application
+        window.addEventListener('load', () => {
+            new FuturisticTextApp();
+        });
+    </script>
+</body>
+</html>
